@@ -6,4 +6,7 @@ Using the aorta mask:
 - Find structures connected to aorta
 - These could be branches
 
+Algorithm has to discover whichever branches are present in each case.
+(Do not use a fixed list of named arteries)
+
 '''
