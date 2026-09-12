@@ -5,3 +5,6 @@ scipy
 scikit-image>=0.23
 streamlit
 plotly
+starlette
+uvicorn
+python-multipart
