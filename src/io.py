@@ -47,6 +47,8 @@ def index_to_phsycial(sitk_image, voxel_index):
     """
     physical_point = sitk_image.IndexToPhysicalPoint(voxel_index)
     return physical_point
+
+
     
 import os
 if __name__ == "__main__":
