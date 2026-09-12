@@ -14,13 +14,24 @@ physical coordinates
 '''
 import SimpleITK as sitk
 import numpy as np
+from pathlib import Path
+import shutil
+import tempfile
 
 def load_nifti_image(file_path):
     """
     Loads NIFTI image files using SimpleITK
     """
-    image = sitk.ReadImage(file_path)
-    return image
+    file_path = Path(file_path)
+    with file_path.open("rb") as file:
+        compressed = file.read(2) == b"\x1f\x8b"
+    # Some supplied cases are gzipped but named .nii. Preserve the originals.
+    if compressed and not file_path.name.endswith(".gz"):
+        with tempfile.TemporaryDirectory() as directory:
+            temporary_path = Path(directory) / "image.nii.gz"
+            shutil.copyfile(file_path, temporary_path)
+            return sitk.ReadImage(str(temporary_path))
+    return sitk.ReadImage(str(file_path))
 
 def get_image_array(sitk_image):
     """

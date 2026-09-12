@@ -1,6 +1,7 @@
 # web/app.py
 
 import sys
+import json
 from pathlib import Path
 import tempfile
 
@@ -15,6 +16,9 @@ import plotly.graph_objects as go
 from src.preprocessing import preprocess_case
 from src.detection import detect_candidates
 from src.filtering import filter_candidates
+from src.io import load_nifti_image
+from src.output import write_output
+from run import run_pipeline
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -95,7 +99,7 @@ def load_image(path):
     return sitk.ReadImage(path)
 
 
-def create_aorta_visualization(mask_image, candidates=None):
+def create_aorta_visualization(mask_image, candidates=None, daughters=None):
     """
     Visualize the aorta and candidate points in the same physical
     coordinate system (mm).
@@ -171,6 +175,22 @@ def create_aorta_visualization(mask_image, candidates=None):
                 name="Detected candidates",
             )
         )
+
+    for i, daughter in enumerate(daughters or [], start=1):
+        path = np.asarray(daughter["centerline_points_mm"])
+        seed = np.asarray(daughter["seed_xyz_mm"])
+        normal = np.asarray(daughter["direction_xyz"])
+        fig.add_trace(go.Scatter3d(
+            x=path[:, 0], y=path[:, 1], z=path[:, 2],
+            mode="lines+markers", line=dict(width=6), marker=dict(size=3),
+            name=f"branch_{i:03d}",
+        ))
+        fig.add_trace(go.Cone(
+            x=[seed[0]], y=[seed[1]], z=[seed[2]],
+            u=[normal[0]], v=[normal[1]], w=[normal[2]],
+            sizemode="absolute", sizeref=2, showscale=False,
+            name=f"branch_{i:03d} direction",
+        ))
 
     fig.update_layout(
         scene=dict(
@@ -269,6 +289,12 @@ def display_results(results):
         st.warning(
             "No eligible daughter vessels were detected."
         )
+        st.download_button(
+            label="Download Prediction JSON",
+            data=json.dumps(results, indent=2),
+            file_name="prediction.json",
+            mime="application/json",
+        )
         return
 
     st.subheader("Detected Daughter Vessels")
@@ -357,63 +383,29 @@ else:
 
             try:
 
-                ct_path = save_uploaded_file(
-                    ct_file
-                )
+                with tempfile.TemporaryDirectory() as directory:
+                    ct_path = Path(directory) / ("ct.nii.gz" if ct_file.name.endswith(".gz") else "ct.nii")
+                    mask_path = Path(directory) / ("mask.nii.gz" if mask_file.name.endswith(".gz") else "mask.nii")
+                    ct_path.write_bytes(ct_file.getvalue())
+                    mask_path.write_bytes(mask_file.getvalue())
+                    ct_image = load_nifti_image(ct_path)
+                    mask_image = load_nifti_image(mask_path)
+                    daughters = run_pipeline(ct_image, mask_image)
+                    case_id = ct_file.name.removesuffix(".gz").removesuffix(".nii")
+                    results = write_output(case_id, daughters, str(Path(directory) / "prediction.json"))
 
-                mask_path = save_uploaded_file(
-                    mask_file
-                )
-
-                # ------------------------------------------------
-                # TEMPORARY PIPELINE
-                #
-                # Replace this section with your team's
-                # final run_pipeline() function once run.py
-                # is complete.
-                # ------------------------------------------------
-
-                from src.preprocessing import preprocess_case
-                from src.detection import detect_candidates
-                from src.filtering import filter_candidates
-
-                data = preprocess_case(
-                    ct_path,
-                    mask_path,
-                )
-
-                candidates = detect_candidates(
-                    data["ct_image"],
-                    data["aorta_mask_image"],
-                )
-
-                filtered = filter_candidates(
-                    candidates,
-                    data["ct_image"].GetSize()[::-1],
-                    data["ct_image"].GetSpacing()
-                )
-
-                # ------------------------------------------------
-                # CURRENT VISUALIZATION
-                # ------------------------------------------------
-
-                st.session_state[
-                    "data"
-                ] = data
-
-                st.session_state[
-                    "candidates"
-                ] = filtered
-
-                st.session_state[
-                    "analysis_complete"
-                ] = True
+                st.session_state["mask_image"] = mask_image
+                st.session_state["daughters"] = daughters
+                st.session_state["results"] = results
+                st.session_state["analysis_complete"] = True
 
                 st.success(
                     "Analysis completed successfully!"
                 )
 
             except Exception as e:
+
+                st.session_state["analysis_complete"] = False
 
                 st.error(
                     f"Pipeline failed: {e}"
@@ -431,54 +423,23 @@ if st.session_state.get(
     False
 ):
 
-    data = st.session_state["data"]
-
-    candidates = st.session_state[
-        "candidates"
-    ]
+    daughters = st.session_state["daughters"]
 
     st.divider()
 
     st.header("Visualization")
 
     fig = create_aorta_visualization(
-    data["aorta_mask_image"],
-    filtered
+        st.session_state["mask_image"],
+        daughters=daughters,
     )
     
     st.plotly_chart(fig, use_container_width=True)
 
     st.caption(
-        "Candidate points represent locations identified "
-        "by the detection and filtering stages."
+        "Lines show traced proximal centerlines. Arrows show the ostium-to-seed direction."
     )
 
     st.divider()
 
-    st.header("Pipeline Results")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric(
-            "Raw candidates",
-            "—",
-        )
-
-    with col2:
-        st.metric(
-            "Filtered candidates",
-            len(candidates),
-        )
-
-    with col3:
-        st.metric(
-            "Pipeline status",
-            "Complete",
-        )
-
-    st.info(
-        "Final daughter-vessel geometry will appear here "
-        "once tracing and geometry modules are integrated."
-    )
-
+    display_results(st.session_state["results"])

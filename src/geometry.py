@@ -13,7 +13,7 @@ radius = estimate_radius(...)
 
 '''
 import numpy as np
-from scipy.ndimage import distance_transform_edt # type: ignore
+from scipy.ndimage import distance_transform_edt, map_coordinates
 import SimpleITK as sitk
 
 def extract_ostium(candidate):
@@ -38,7 +38,7 @@ def extract_ostium(candidate):
     
     return ostium_xyz_mm, ostium_index_xyz
 
-def find_seed(ostium_xyz_mm, centerline_points_mm):
+def find_seed(ostium_xyz_mm, centerline_points_mm, distance_mm=5.0):
     """
     Finds the seed point 5 mm outward from the ostium along the vessel.
     
@@ -55,23 +55,18 @@ def find_seed(ostium_xyz_mm, centerline_points_mm):
     seed_xyz_mm : list of float
         The physical [x, y, z] coordinates of the seed point.
     """
-    ostium = np.array(ostium_xyz_mm)
-    
+    if not np.isfinite(distance_mm) or distance_mm < 0:
+        raise ValueError("distance_mm must be finite and non-negative.")
+    previous = np.asarray(ostium_xyz_mm, dtype=float)
+    remaining = distance_mm
     for point in centerline_points_mm:
-        current_point = np.array(point)
-        
-        # Calculate the Euclidean distance in physical millimeters
-        distance_mm = np.linalg.norm(current_point - ostium)
-        
-        # Stop as soon as we cross the 5 mm threshold
-        if distance_mm >= 5.0:
-            return current_point.tolist()
-            
-    # Fallback: if the branch terminates before 5 mm, return the furthest traced point
-    if centerline_points_mm:
-        return centerline_points_mm[-1]
-    
-    return ostium_xyz_mm
+        current = np.asarray(point, dtype=float)
+        segment_length = float(np.linalg.norm(current - previous))
+        if segment_length > 0 and segment_length >= remaining - 1e-9:
+            return (previous + min(remaining / segment_length, 1.0) * (current - previous)).tolist()
+        remaining -= segment_length
+        previous = current
+    raise ValueError(f"Centerline does not extend {distance_mm:g} mm from the ostium.")
 
 def calculate_direction(ostium_xyz_mm, seed_xyz_mm):
     """
@@ -100,7 +95,7 @@ def calculate_direction(ostium_xyz_mm, seed_xyz_mm):
     unit_vector = vector / magnitude
     return unit_vector.tolist()
 
-def estimate_radius(seed_xyz_mm, component_mask, spacing):
+def estimate_radius(seed_index_xyz, component_mask, spacing):
     """
     Estimates the vessel radius at the seed point in physical millimeters.
     
@@ -121,19 +116,16 @@ def estimate_radius(seed_xyz_mm, component_mask, spacing):
 
     # SimpleITK spacing is (x, y, z), but NumPy shape/indexing is (z, y, x)[cite: 2].
     # We reverse the spacing to match the (z, y, x) sampling order for the distance transform.
-    spacing_zyx = tuple(reversed(spacing))  
-
-    # Calculate distance map where every voxel value is its physical distance to the background (mm)
-    distance_map = distance_transform_edt(component_mask, sampling=spacing_zyx)
-
-    x, y, z = seed_xyz_mm
-
-    z = min(max(0,z), component_mask.shape[0]-1)
-    y = min(max(0,y), component_mask.shape[1]-1)
-    x = min(max(0,x), component_mask.shape[2]-1)       
-
-    radius_mm = float(distance_map[z, y, x])  # Accessing the distance map in (z, y, x) order
-    return radius_mm
+    spacing_zyx = tuple(reversed(spacing))
+    seed_zyx = np.asarray(seed_index_xyz, dtype=float)[::-1]
+    if (seed_zyx.shape != (3,) or not np.isfinite(seed_zyx).all()
+            or np.any(seed_zyx < 0) or np.any(seed_zyx > np.asarray(component_mask.shape) - 1)):
+        raise ValueError("Seed index must lie inside the component image.")
+    # Padding provides background at image borders; interpolation supports a 5 mm seed
+    # between voxel centers. This is a voxel-based radius approximation.
+    distance_map = distance_transform_edt(np.pad(component_mask.astype(bool), 1),
+                                          sampling=spacing_zyx)[1:-1, 1:-1, 1:-1]
+    return float(map_coordinates(distance_map, seed_zyx[:, None], order=1)[0])
 
 if __name__ == "__main__":
     print("Testing geometry calculations...")

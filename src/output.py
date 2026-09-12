@@ -52,4 +52,5 @@ def write_output(case_id, daughters, output_path):
         os.makedirs(output_directory, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(output, file, indent=2)
+        json.dump(output, file, indent=2, allow_nan=False)
+    return output

@@ -2,3 +2,6 @@ numpy
 matplotlib
 simpleITK
 scipy
+scikit-image>=0.23
+streamlit
+plotly
