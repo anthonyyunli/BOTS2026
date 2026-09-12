@@ -1,11 +1,15 @@
+import SimpleITK as sitk
+
 from src.preprocessing import preprocess_case
 from src.detection import detect_candidates
 
+CT_PATH = "data/subject002/orig2.nii"
+MASK_PATH = "data/subject002/mask2.nii"
 
-data = preprocess_case(
-    "data/subject002/orig2.nii",
-    "data/subject002/mask2.nii"
-)
+ct_image = sitk.ReadImage(str(CT_PATH))
+mask_image = sitk.ReadImage(str(MASK_PATH))
+
+data = preprocess_case(ct_image, mask_image)
 
 print("Preprocessing complete.")
 print("Processed CT shape:", data["ct"].shape)

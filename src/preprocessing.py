@@ -7,53 +7,6 @@ import SimpleITK as sitk
 import numpy as np
 
 
-def load_nifti(path):
-  """
-  Load a nifti file using SimpleITK.
-
-  Returns:
-  - image: SimpleITK image
-  - array: NumPy array
-  """
-
-  image = sitk.ReadImage(str(path))
-  array = sitk.GetArrayFromImage(image)
-
-  return image, array
-
-
-def load_case(ct_path, mask_path):
-  """
-  Load the CT volume and aorta mask for one case.
-  """
-
-  ct_image, ct_array = load_nifti(ct_path)
-  mask_image, mask_array = load_nifti(mask_path)
-
-  # Making sure CT and mask use the same spatial grid.
-  if ct_image.GetSize() != mask_image.GetSize():
-    raise ValueError("CT and mask have different dimensions.")
-
-  if ct_image.GetSpacing() != mask_image.GetSpacing():
-    raise ValueError("CT and mask have different voxel spacing.")
-
-  if ct_image.GetOrigin() != mask_image.GetOrigin():
-    raise ValueError("CT and mask have different physical origins.")
-
-  if ct_image.GetDirection() != mask_image.GetDirection():
-    raise ValueError("CT and mask have different physical directions.")
-
-  # Make sure the mask is binary
-  mask_array = mask_array > 0
-
-  return {
-    "ct_image": ct_image,
-    "ct": ct_array,
-    "mask_image": mask_image,
-    "mask": mask_array,
-  }
-
-
 def get_bounding_box(mask):
     """
     Return the bounding box of the non-zero mask.
@@ -176,7 +129,7 @@ def get_cropped_origin(image, start_zyx):
     return image.TransformIndexToPhysicalPoint(start_xyz)
 
 
-def preprocess_case(ct_path, mask_path, margin_mm=15):
+def preprocess_case(ct_image, mask_image, margin_mm=15):
     """
     Complete preprocessing pipeline.
 
@@ -191,13 +144,9 @@ def preprocess_case(ct_path, mask_path, margin_mm=15):
         - direction: image orientation
         - crop_info: information about the crop
     """
-
-    case = load_case(ct_path, mask_path)
-
-    ct_image = case["ct_image"]
-    ct = case["ct"]
-    mask_image = case["mask_image"]
-    mask = case["mask"]
+    
+    ct = sitk.ReadImage(str(ct_image))
+    mask = sitk.GetArrayFromImage(mask_image)
 
     # Crop around the aorta
     ct_crop, mask_crop, crop_info = crop_around_aorta(
