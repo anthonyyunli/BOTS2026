@@ -1,8 +1,6 @@
 '''
 Prepare the CT: 
-
 Crop around aorta -> Normalize intensities -> Remove irrelevant regions -> Enhance vessels
-
 '''
 
 import SimpleITK as sitk
@@ -156,21 +154,52 @@ def normalize_ct(ct):
     return normalized.astype(np.float32)
 
 
+def get_cropped_origin(image, start_zyx):
+    """
+    Calculate the physical origin of a cropped image.
+
+    start_zyx is in NumPy order:
+        z, y, x
+
+    SimpleITK expects:
+        x, y, z
+    """
+
+    start_z, start_y, start_x = start_zyx
+
+    start_xyz = (
+        int(start_x),
+        int(start_y),
+        int(start_z)
+    )
+
+    return image.TransformIndexToPhysicalPoint(start_xyz)
+
+
 def preprocess_case(ct_path, mask_path, margin_mm=15):
     """
     Complete preprocessing pipeline.
 
-    Returns the cropped and normalized CT together with the
-    corresponding aorta mask and spatial information.
+    Returns:
+        A dictionary containing:
+        - ct_image: cropped SimpleITK CT image
+        - aorta_mask_image: cropped SimpleITK aorta mask image
+        - ct: cropped, normalized NumPy CT array
+        - mask: cropped NumPy aorta mask
+        - spacing: voxel spacing in mm
+        - origin: physical origin of cropped image
+        - direction: image orientation
+        - crop_info: information about the crop
     """
 
     case = load_case(ct_path, mask_path)
 
     ct_image = case["ct_image"]
     ct = case["ct"]
+    mask_image = case["mask_image"]
     mask = case["mask"]
 
-    # Crop around the aorta.
+    # Crop around the aorta
     ct_crop, mask_crop, crop_info = crop_around_aorta(
         ct,
         mask,
@@ -178,21 +207,51 @@ def preprocess_case(ct_path, mask_path, margin_mm=15):
         margin_mm=margin_mm,
     )
 
-    # Normalize intensities.
+    # Normalize CT for downstream processing
     ct_processed = normalize_ct(ct_crop)
 
+    # Create SimpleITK images from the cropped arrays
+    #
+    # Important:
+    # GetImageFromArray expects NumPy order (z, y, x).
+    cropped_ct_image = sitk.GetImageFromArray(
+        ct_processed
+    )
+
+    cropped_mask_image = sitk.GetImageFromArray(
+        mask_crop.astype(np.uint8)
+    )
+
+    # Calculate the physical origin of the cropped image.
+    cropped_origin = get_cropped_origin(
+        ct_image,
+        crop_info["start_zyx"]
+    )
+
+    # Preserve physical coordinate information.
+    cropped_ct_image.SetSpacing(ct_image.GetSpacing())
+    cropped_ct_image.SetOrigin(cropped_origin)
+    cropped_ct_image.SetDirection(ct_image.GetDirection())
+
+    cropped_mask_image.SetSpacing(mask_image.GetSpacing())
+    cropped_mask_image.SetOrigin(cropped_origin)
+    cropped_mask_image.SetDirection(mask_image.GetDirection())
+
     return {
+        # These are what detection.py will use
+        "ct_image": cropped_ct_image,
+        "aorta_mask_image": cropped_mask_image,
+
+        # These are useful for other algorithms
         "ct": ct_processed,
         "mask": mask_crop,
 
-        # Preserve original physical metadata.
+        # Physical information
         "spacing": ct_image.GetSpacing(),
-        "origin": get_cropped_origin(
-          ct_image,
-          crop_info["start_zyx"]
-        ),
+        "origin": cropped_origin,
         "direction": ct_image.GetDirection(),
 
+        # Useful for converting cropped coordinates later
         "crop_info": crop_info,
     }
 
