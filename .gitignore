@@ -1,1 +1,4 @@
 .env
+data/
+docs/
+__pycache__/
