@@ -1,7 +1,20 @@
+import argparse  # for the hiddentests where they uppload a ct scan to check code 
 def main():
-    image_path = "data/subject001/orig1.nii" 
-    mask_path = "data/subject001/mask1.nii" 
-    image,ct,mask= // io function (image_path, mask_path) 
+    # will understand the information given by the user 
+    parser = argparse.ArgumentParser()  
+    # get the CT file 
+    parser.add_argument("--image", required=True)
+    # get the aorta mask 
+    parser.add_argument("--aorta-mask". required=True)
+    # get the location where we will save our prediciton 
+    parser.add_argument("--output", required=True)
+    # to save the result as json 
+    args=parser.parse_args() 
+    # store the ct file, mask and output in these variables 
+    image_path = args.image  
+    mask_path = args.aorta_mask 
+    output_path = args.output 
+    
     # 1. Load CT
     # 2. Load aorta mask
     # 3. Detect branches
