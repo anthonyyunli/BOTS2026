@@ -45,12 +45,156 @@ def load_case(ct_path, mask_path):
   if ct_image.GetDirection() != mask_image.GetDirection():
     raise ValueError("CT and mask have different physical directions.")
 
+  # Make sure the mask is binary
+  mask_array = mask_array > 0
+
   return {
     "ct_image": ct_image,
     "ct": ct_array,
     "mask_image": mask_image,
     "mask": mask_array,
   }
+
+
+def get_bounding_box(mask):
+    """
+    Return the bounding box of the non-zero mask.
+
+    NumPy array order:
+        z, y, x
+
+    Returns:
+        min_coords
+        max_coords
+    """
+
+    coords = np.argwhere(mask > 0)
+
+    if len(coords) == 0:
+        raise ValueError("Aorta mask is empty.")
+
+    min_coords = coords.min(axis=0)
+    max_coords = coords.max(axis=0)
+
+    return min_coords, max_coords
+
+
+def crop_around_aorta(ct, mask, spacing, margin_mm=15):
+    """
+    Crop CT and aorta mask around the aorta.
+
+    The margin is specified in physical millimetres rather than
+    voxels because the challenge uses physical distances.
+
+    Args:
+        ct: CT NumPy array in (z, y, x)
+        mask: binary mask in (z, y, x)
+        spacing: SimpleITK spacing in (x, y, z)
+        margin_mm: physical margin around the aorta
+
+    Returns:
+        cropped_ct
+        cropped_mask
+        crop_info
+    """
+
+    min_coords, max_coords = get_bounding_box(mask)
+
+    # NumPy dimensions are z, y, x.
+    # SimpleITK spacing is x, y, z.
+    spacing_xyz = np.asarray(spacing)
+    spacing_zyx = spacing_xyz[::-1]
+
+    # Convert physical margin into voxels.
+    margin_voxels = np.ceil(
+        margin_mm / spacing_zyx
+    ).astype(int)
+
+    # Expand bounding box.
+    start = np.maximum(
+        min_coords - margin_voxels,
+        0
+    )
+
+    end = np.minimum(
+        max_coords + margin_voxels + 1,
+        np.array(ct.shape)
+    )
+
+    z0, y0, x0 = start
+    z1, y1, x1 = end
+
+    cropped_ct = ct[z0:z1, y0:y1, x0:x1]
+    cropped_mask = mask[z0:z1, y0:y1, x0:x1]
+
+    crop_info = {
+        "start_zyx": start,
+        "end_zyx": end,
+        "margin_mm": margin_mm,
+    }
+
+    return cropped_ct, cropped_mask, crop_info
+
+
+def normalize_ct(ct):
+    """
+    Normalize CT intensities using robust percentile clipping.
+
+    The extreme CT values are clipped, then the result is scaled
+    approximately to [0, 1].
+    """
+
+    lower = np.percentile(ct, 1)
+    upper = np.percentile(ct, 99.5)
+
+    clipped = np.clip(ct, lower, upper)
+
+    normalized = (
+        clipped - lower
+    ) / (upper - lower)
+
+    return normalized.astype(np.float32)
+
+
+def preprocess_case(ct_path, mask_path, margin_mm=15):
+    """
+    Complete preprocessing pipeline.
+
+    Returns the cropped and normalized CT together with the
+    corresponding aorta mask and spatial information.
+    """
+
+    case = load_case(ct_path, mask_path)
+
+    ct_image = case["ct_image"]
+    ct = case["ct"]
+    mask = case["mask"]
+
+    # Crop around the aorta.
+    ct_crop, mask_crop, crop_info = crop_around_aorta(
+        ct,
+        mask,
+        ct_image.GetSpacing(),
+        margin_mm=margin_mm,
+    )
+
+    # Normalize intensities.
+    ct_processed = normalize_ct(ct_crop)
+
+    return {
+        "ct": ct_processed,
+        "mask": mask_crop,
+
+        # Preserve original physical metadata.
+        "spacing": ct_image.GetSpacing(),
+        "origin": get_cropped_origin(
+          ct_image,
+          crop_info["start_zyx"]
+        ),
+        "direction": ct_image.GetDirection(),
+
+        "crop_info": crop_info,
+    }
 
 
 def inspect_case(ct_image, ct, mask):
@@ -62,6 +206,7 @@ def inspect_case(ct_image, ct, mask):
   print("CT mean:", np.mean(ct))
 
   print("\nCT percentiles:")
+  
   for p in [1, 5, 25, 50, 75, 95, 99, 99.5, 99.9]:
     print(f"{p}%: {np.percentile(ct, p):.2f}")
 
@@ -89,3 +234,25 @@ def get_bounding_box(mask):
     max_coords = coords.max(axis=0)
 
     return min_coords, max_coords
+
+
+def get_cropped_origin(image, start_zyx):
+    """
+    Calculate the physical origin of a cropped image.
+
+    start_zyx is in NumPy array order:
+        z, y, x
+
+    SimpleITK expects:
+        x, y, z
+    """
+
+    start_z, start_y, start_x = start_zyx
+
+    start_xyz = (
+        int(start_x),
+        int(start_y),
+        int(start_z)
+    )
+
+    return image.TransformIndexToPhysicalPoint(start_xyz)
