@@ -12,6 +12,7 @@ direction = calculate_direction(...)
 radius = estimate_radius(...)
 
 '''
+import os
 import numpy as np
 from scipy.ndimage import distance_transform_edt, map_coordinates
 import SimpleITK as sitk
@@ -127,36 +128,63 @@ def estimate_radius(seed_index_xyz, component_mask, spacing):
                                           sampling=spacing_zyx)[1:-1, 1:-1, 1:-1]
     return float(map_coordinates(distance_map, seed_zyx[:, None], order=1)[0])
 
+
 if __name__ == "__main__":
-    print("Testing geometry calculations...")
+    print("Running integration test with actual .nii files...")
     
-    # 1. Mock a small 3D binary component mask (z, y, x)
-    mock_mask = np.zeros((20, 20, 20), dtype=bool)
-    mock_mask[5:15, 5:15, 5:15] = True
+    # Locate your dataset files dynamically
+    search_dir = os.getcwd()
+    found_ct = None
+    found_mask = None
     
-    # 2. Mock inputs
-    mock_candidate = {
-        "point_xyz_mm": [10.0, 10.0, 10.0],
-        "index_xyz": [5, 5, 5]
-    }
-    mock_spacing = (1.0, 1.0, 1.0) # (x, y, z)
-    mock_centerline = [
-        [10.0, 10.0, 10.0],
-        [12.0, 10.0, 10.0],
-        [15.0, 10.0, 10.0] # This passes the 5mm threshold from [10,10,10]
-    ]
-    
-    # 3. Test each function sequentially
-    ostium_mm, ostium_idx = extract_ostium(mock_candidate)
-    print(f"Ostium (mm): {ostium_mm}, Index: {ostium_idx}")
-    
-    seed_mm = find_seed(ostium_mm, mock_centerline)
-    print(f"Seed (mm): {seed_mm}")
-    
-    direction = calculate_direction(ostium_mm, seed_mm)
-    print(f"Direction Vector: {direction}")
-    
-    radius = estimate_radius(ostium_idx, mock_mask, mock_spacing)
-    print(f"Estimated Radius: {radius} mm")
-    
-    print("Geometry tests completed successfully!")
+    for root, dirs, files in os.walk(search_dir):
+        for file in files:
+            if file == "orig1.nii":
+                found_ct = os.path.join(root, file)
+            elif file == "mask1.nii":
+                found_mask = os.path.join(root, file)
+                
+    if found_ct and found_mask:
+        print(f"Found real dataset! Loading directly...")
+        
+        # Load directly via SimpleITK to avoid any wrapper issues
+        ct_image = sitk.ReadImage(found_ct)
+        mask_image = sitk.ReadImage(found_mask)
+        spacing = ct_image.GetSpacing()
+        
+        # Run detection to find real candidates
+        from detection import detect_candidates
+        candidates = detect_candidates(ct_image, mask_image)
+        print(f"Detected {len(candidates)} candidate branch(es).")
+        
+        if len(candidates) > 0:
+            test_candidate = candidates[0]
+            print("\nTesting geometry on candidate 0:")
+            
+            # Extract ostium
+            ostium_mm, ostium_idx = extract_ostium(test_candidate)
+            print(f"  - Ostium (mm): {ostium_mm}")
+            print(f"  - Ostium (index): {ostium_idx}")
+            
+            # Dummy centerline for find_seed test
+            dummy_centerline = [
+                ostium_mm,
+                [ostium_mm[0] + 2.0, ostium_mm[1], ostium_mm[2]],
+                [ostium_mm[0] + 5.5, ostium_mm[1], ostium_mm[2]]
+            ]
+            seed_mm = find_seed(ostium_mm, dummy_centerline)
+            print(f"  - Seed (mm): {seed_mm}")
+            
+            # Calculate direction
+            direction = calculate_direction(ostium_mm, seed_mm)
+            print(f"  - Direction Vector: {direction}")
+            
+            # Estimate radius using mask array
+            mask_array = sitk.GetArrayFromImage(mask_image) > 0
+            radius = estimate_radius(ostium_idx, mask_array, spacing)
+            print(f"  - Estimated Radius: {radius:.2f} mm")
+            
+        else:
+            print("No candidates found to test geometry on.")
+    else:
+        print("Could not find orig1.nii or mask1.nii in the directory.")
