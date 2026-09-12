@@ -1,6 +1,6 @@
-# The visualization tool 
+# The visualization tool -- niiVue 
 
-tool  detects eligible daughter arteries that directly originate from the abdominal aorta in CTA volumes.
+NiiVue detects eligible daughter arteries that directly originate from the abdominal aorta in CTA volumes.
 
 ## Setup
 python3 -m pip install -r requirements.txt
