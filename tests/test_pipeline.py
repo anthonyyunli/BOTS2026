@@ -12,8 +12,8 @@ mask_image = sitk.ReadImage(str(MASK_PATH))
 data = preprocess_case(ct_image, mask_image)
 
 print("Preprocessing complete.")
-print("Processed CT shape:", data["ct"].shape)
-print("Processed mask shape:", data["mask"].shape)
+print("Processed CT size:", data["ct_image"].GetSize())
+print("Processed mask size:", data["aorta_mask_image"].GetSize())
 
 
 candidates = detect_candidates(
