@@ -32,6 +32,8 @@ function App() {
   const [preset, setPreset] = useState('Angiography')
   const [reset, setReset] = useState(0)
   const [help, setHelp] = useState(false)
+  const [ctOpacity, setCtOpacity] = useState(1)
+  const [clip, setClip] = useState({ enabled: false, depth: 0, axis: 'Coronal' })
 
   useEffect(() => {
     let cancelled = false
@@ -67,6 +69,8 @@ function App() {
       setShowBranches(true)
       setAortaOpacity(0.28)
       setPreset('Angiography')
+      setCtOpacity(1)
+      setClip({ enabled: false, depth: 0, axis: 'Coronal' })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not complete the analysis.')
     } finally { setBusy(false) }
@@ -125,6 +129,23 @@ function App() {
           <input className="opacity-slider" type="range" aria-label="Aorta overlay opacity" min="0" max="0.7" step="0.01" disabled={!analysis} value={aortaOpacity} onChange={event => setAortaOpacity(Number(event.target.value))} />
           <label className="layer-control branch-switch"><span><i className="color-swatch branch-color" /> Traced branches</span><input type="checkbox" disabled={!analysis} checked={showBranches} onChange={event => setShowBranches(event.target.checked)} /><span className="switch-track" /></label>
           <div className="sidebar-tip"><Crosshair size={17} /><p>Select a branch to jump to its origin in every slice.</p></div>
+          <div className="panel-rule" />
+          <div className="panel-heading"><span className="section-icon"><Box size={17} /></span><h2>Explore anatomy</h2></div>
+          <div className="explore-buttons">
+            <button disabled={!analysis} onClick={() => { setShowBranches(true); setCtOpacity(0); setAortaOpacity(0.45); setMode(SLICE_TYPE.RENDER); setClip(value => ({ ...value, enabled: false })) }}>Vessel focus</button>
+            <button disabled={!analysis} onClick={() => { setShowBranches(false); setAortaOpacity(0); setCtOpacity(1); setMode(SLICE_TYPE.MULTIPLANAR); setClip(value => ({ ...value, enabled: false })) }}>Inspect raw CT</button>
+          </div>
+          <div className="layer-control"><span>CT opacity</span><output>{Math.round(ctOpacity * 100)}%</output></div>
+          <input className="opacity-slider" type="range" aria-label="CT opacity" min="0" max="1" step="0.05" disabled={!analysis} value={ctOpacity} onChange={event => setCtOpacity(Number(event.target.value))} />
+          <label className="layer-control branch-switch"><span>3D clipping plane</span><input type="checkbox" disabled={!analysis} checked={clip.enabled} onChange={event => { setClip(value => ({ ...value, enabled: event.target.checked })); if (event.target.checked) setMode(SLICE_TYPE.RENDER) }} /><span className="switch-track" /></label>
+          {clip.enabled && <div className="clip-controls">
+            <label className="field-label" htmlFor="clip-axis">CUT DIRECTION</label>
+            <select id="clip-axis" value={clip.axis} onChange={event => setClip(value => ({ ...value, axis: event.target.value }))}>{['Coronal', 'Sagittal', 'Axial'].map(axis => <option key={axis}>{axis}</option>)}</select>
+            <label className="field-label clip-depth-label" htmlFor="clip-depth">PLANE POSITION <span>{clip.depth.toFixed(2)}</span></label>
+            <input id="clip-depth" className="opacity-slider" type="range" min="-1" max="1" step="0.02" value={clip.depth} onChange={event => setClip(value => ({ ...value, depth: Number(event.target.value) }))} />
+            <p className="explore-note">Move the plane with this slider. The wheel zooms the 3D view.</p>
+          </div>}
+          <p className="explore-note">Explore the original CT intensities, cropped around the aorta. Clipping reveals structures outside the detected branches. Unlabelled anatomy is not classified.</p>
         </aside>
 
         <section className="scan-panel">
@@ -132,14 +153,14 @@ function App() {
           {error && <div role="alert" className="error-banner"><TriangleAlert size={18} /><div><strong>Could not analyze this case</strong><p>{error}</p>{analysis && <small>Previous scan remains displayed.</small>}</div><button aria-label="Dismiss error" onClick={() => setError('')}><X size={16} /></button></div>}
           <div className="viewer-toolbar"><div className="view-tabs">{modes.map(item => <button key={item.value} disabled={!analysis} className={mode === item.value ? 'active' : ''} onClick={() => setMode(item.value)}>{item.value === SLICE_TYPE.RENDER && <Box size={13} />}{item.label}</button>)}</div><button className="reset-button" title="Reset zoom and rotation" aria-label="Reset view" disabled={!analysis} onClick={() => setReset(value => value + 1)}><RotateCcw size={15} /></button></div>
           <div className="viewer-stage">
-            {analysis ? <VolumeViewer key={analysis.assets.ct} analysis={analysis} selected={selected} mode={mode} aortaOpacity={aortaOpacity} showBranches={showBranches} window={windows[preset]} reset={reset} /> : <div className="empty-viewer">
+            {analysis ? <VolumeViewer key={analysis.assets.ct} analysis={analysis} selected={selected} mode={mode} aortaOpacity={aortaOpacity} showBranches={showBranches} window={windows[preset]} reset={reset} ctOpacity={ctOpacity} clip={clip} /> : <div className="empty-viewer">
               <div className="scan-grid"><div className="scan-orbit"><Scan size={49} strokeWidth={1} /><span className="orbit-point" /></div></div>
               <span className="viewer-eyebrow">AORTIC BRANCH EXPLORER</span><h2>Anatomy, in perspective.</h2><p>Load a case to explore aligned CT slices,<br />aorta segmentation, and daughter centerlines.</p>
               <button className="viewer-start" disabled={!canRun || busy} onClick={() => void analyze()}>{busy ? <LoaderCircle className="spin" size={16} /> : <Scan size={16} />}{source === 'sample' ? 'Explore ' + caseId : 'Analyze uploaded scan'}<ArrowRight size={15} /></button>
             </div>}
             {busy && analysis && <div className="analysis-overlay"><LoaderCircle className="spin" size={25} /><strong>Tracing daughter vessels</strong><span>Processing the selected scan…</span></div>}
           </div>
-          <div className="viewer-footer"><span><span className="live-dot" /> {analysis ? 'NiiVue · linked views' : 'NiiVue · 3D ready'}</span><span>Scroll to slice <b>·</b> Drag to navigate <b>·</b> Right-drag for contrast</span></div>
+          <div className="viewer-footer"><span><span className="live-dot" /> {analysis ? 'NiiVue · linked views' : 'NiiVue · 3D ready'}</span><span>{mode === SLICE_TYPE.RENDER ? 'Drag to orbit · Wheel / W S zoom · A D orbit · Q E tilt · R reset' : 'Scroll to slice · Drag to navigate · Right-drag for contrast'}</span></div>
           <div className="scan-metadata"><div><span>VOLUME</span><strong>{analysis ? analysis.size.join(' × ') : '—'}<small>{analysis && ' voxels'}</small></strong></div><div><span>VOXEL SPACING</span><strong>{analysis ? analysis.spacing.map(value => value.toFixed(2)).join(' × ') : '—'}<small>{analysis && ' mm'}</small></strong></div><div><span>ANALYSIS TIME</span><strong>{analysis ? analysis.runtime_seconds.toFixed(2) : '—'}<small>{analysis && ' sec'}</small></strong></div></div>
         </section>
 
@@ -153,6 +174,7 @@ function App() {
             <div className="coordinate-heading"><span>PHYSICAL COORDINATES</span><span>LPS · mm</span></div>
             <div className="coordinate-table"><span /><span>X</span><span>Y</span><span>Z</span><strong>Origin</strong>{branch.ostium_xyz_mm.map((value, i) => <span key={'o' + i}>{value.toFixed(1)}</span>)}<strong>5 mm seed</strong>{branch.seed_xyz_mm.map((value, i) => <span key={'s' + i}>{value.toFixed(1)}</span>)}</div>
             <div className="direction-row"><span>Direction</span><code>{branch.direction_xyz.map(value => value.toFixed(2)).join(', ')}</code></div>
+            <p className="geometry-note">Sphere: measured radius at the 5 mm seed.<br />Centerline width is enlarged for visibility.</p>
           </div>}
           <div className="results-bottom">{analysis ? <a className="export-button" href={analysis.assets.prediction} download><ArrowDownToLine size={17} />Export prediction<small>JSON</small></a> : <button className="export-button" disabled><ArrowDownToLine size={17} />Export prediction<small>JSON</small></button>}<p>Algorithm-generated results.<br />Review against the source images.</p></div>
         </aside>

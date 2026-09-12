@@ -4,3 +4,4 @@ docs/
 __pycache__/
 .debug
 testing.ipynb
+test.md
