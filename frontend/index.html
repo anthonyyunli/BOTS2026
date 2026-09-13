@@ -5,9 +5,42 @@
     <meta name="theme-color" content="#285841" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BranchSeed · Vascular workspace</title>
+    <link rel="stylesheet" href="/src/startup.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="startup-screen" role="status" aria-label="Opening BranchSeed">
+      <svg class="startup-vessels" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" fill="none" aria-hidden="true">
+        <g class="startup-vessel-lines">
+          <path d="M720 980V640Q720 560 620 530L410 460Q310 425 310 300V-80" />
+          <path d="M720 640Q720 560 820 530L1030 460Q1130 425 1130 300V-80" />
+          <path d="M410 460Q410 350 235 305L-80 225M1030 460Q1030 350 1205 305L1520 225" />
+          <path d="M310 300Q310 200 490 155L630-60M1130 300Q1130 200 950 155L810-60" />
+        </g>
+        <g class="startup-vessel-flow">
+          <path pathLength="1" d="M720 980V640Q720 560 620 530L410 460Q310 425 310 300V-80" />
+          <path pathLength="1" d="M720 980V640Q720 560 820 530L1030 460Q1130 425 1130 300V-80" />
+        </g>
+      </svg>
+      <div class="startup-center">
+        <div class="startup-emblem" aria-hidden="true">
+          <div class="startup-rings"></div>
+          <div class="startup-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path pathLength="1" d="M12 15v-3M6 9v2c0 .6.4 1 1 1h10c.6 0 1-.4 1-1V9" />
+              <circle pathLength="1" cx="12" cy="18" r="3" />
+              <circle pathLength="1" cx="6" cy="6" r="3" />
+              <circle pathLength="1" cx="18" cy="6" r="3" />
+            </svg>
+          </div>
+        </div>
+        <div class="startup-wordmark" aria-hidden="true">Branch<span>Seed</span><i>.</i></div>
+        <p class="startup-tagline">Every branch. A new perspective.</p>
+        <div class="startup-status"><span></span>Opening your workspace</div>
+        <noscript>Enable JavaScript to open the workspace.</noscript>
+      </div>
+      <div class="startup-caption" aria-hidden="true"><span>BRANCHSEED / VASCULAR WORKSPACE</span><span>FROM IMAGE TO INSIGHT</span></div>
+    </div>
+    <div id="root" inert></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

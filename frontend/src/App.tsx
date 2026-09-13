@@ -16,6 +16,20 @@ const modes = [
 const windows: Record<string, [number, number]> = { Angiography: [0, 500], 'Soft tissue': [-160, 240], Bone: [-500, 1500] }
 
 function App() {
+  useEffect(() => {
+    const intro = document.getElementById('startup-screen')
+    if (!intro) return
+    // Let the logo finish once; slow bundle loads do not add another delay.
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const delay = reducedMotion ? 0 : Math.max(0, 1800 - performance.now())
+    const reveal = window.setTimeout(() => intro.classList.add('is-ready'), delay)
+    const remove = window.setTimeout(() => {
+      intro.remove()
+      document.getElementById('root')?.removeAttribute('inert')
+    }, delay + (reducedMotion ? 150 : 400))
+    return () => { window.clearTimeout(reveal); window.clearTimeout(remove) }
+  }, [])
+
   const [cases, setCases] = useState<string[]>([])
   const [caseId, setCaseId] = useState('subject002')
   const [source, setSource] = useState<'sample' | 'upload'>('sample')

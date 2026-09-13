@@ -1,0 +1,66 @@
+/* Critical startup UI: available before the React bundle is ready. */
+#startup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 43%, #194b3b 0%, #0c2822 38%, #071613 78%);
+  color: #eef8ef;
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  transition: opacity 400ms ease, visibility 400ms;
+}
+#startup-screen.is-ready { opacity: 0; visibility: hidden; }
+#startup-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(#b1e5cc05 1px, transparent 1px), linear-gradient(90deg, #b1e5cc05 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse, transparent 15%, black);
+}
+.startup-vessels { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .6; }
+.startup-vessel-lines { stroke: #75cfa6; stroke-width: 1; opacity: .12; }
+.startup-vessel-flow { stroke: #8cf0b9; stroke-width: 2; filter: drop-shadow(0 0 7px #8cf0b9); }
+.startup-vessel-flow path { stroke-dasharray: .09 .91; animation: startup-flow 3s cubic-bezier(.3, .1, .25, 1) infinite; }
+.startup-vessel-flow path:nth-child(2) { animation-delay: 180ms; }
+.startup-center { position: relative; display: flex; align-items: center; flex-direction: column; text-align: center; padding: 24px; }
+.startup-emblem { position: relative; display: grid; place-items: center; width: 220px; height: 190px; }
+.startup-rings, .startup-rings::before, .startup-rings::after { position: absolute; width: 210px; height: 210px; border: 1px solid #a0e8bc16; border-radius: 50%; }
+.startup-rings::before, .startup-rings::after { content: ''; inset: -1px; animation: startup-ripple 2.8s ease-out infinite; }
+.startup-rings::after { animation-delay: 700ms; }
+.startup-logo {
+  display: grid; place-items: center; width: 104px; height: 104px; border-radius: 29px;
+  background: linear-gradient(145deg, #32624b, #163b2f); border: 1px solid #a8f0c03b;
+  box-shadow: 0 16px 48px #0004, inset 0 1px 0 #b6f3c826, 0 0 70px #7af3ad14;
+  color: #b9edc9; animation: startup-arrive 850ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.startup-logo svg { width: 62px; height: 62px; }
+.startup-logo path, .startup-logo circle { stroke-dasharray: 1; stroke-dashoffset: 1; animation: startup-draw 850ms ease forwards; }
+.startup-logo circle { animation-delay: 250ms; }
+.startup-logo circle:nth-last-child(2) { animation-delay: 400ms; }
+.startup-logo circle:last-child { animation-delay: 550ms; }
+.startup-wordmark { margin-top: 20px; font-size: clamp(38px, 6vw, 54px); font-weight: 750; letter-spacing: -2.8px; animation: startup-reveal 700ms 250ms both; }
+.startup-wordmark span { color: #c5e6cb; }
+.startup-wordmark i { font-style: normal; color: #80d69e; }
+.startup-tagline { margin: 13px 0 0; color: #97b7a5; font-size: 13px; letter-spacing: .5px; animation: startup-reveal 650ms 450ms both; }
+.startup-status { display: flex; align-items: center; gap: 9px; margin-top: 49px; color: #79998a; font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; animation: startup-reveal 650ms 600ms both; }
+.startup-status span { width: 5px; height: 5px; border-radius: 50%; background: #99e5b5; animation: startup-breathe 1.8s ease-in-out infinite; }
+.startup-caption { position: absolute; bottom: 30px; left: 35px; right: 35px; display: flex; justify-content: space-between; gap: 20px; color: #597a6a; font: 9px 'Segoe UI', sans-serif; letter-spacing: 1.6px; }
+@keyframes startup-draw { to { stroke-dashoffset: 0; } }
+@keyframes startup-arrive { from { opacity: 0; transform: scale(.78) rotate(-12deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes startup-reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes startup-ripple { from { transform: scale(.65); opacity: 0; } 25% { opacity: 1; } to { transform: scale(1.75); opacity: 0; } }
+@keyframes startup-flow { from { stroke-dashoffset: .1; opacity: 0; } 15%, 70% { opacity: .7; } to { stroke-dashoffset: -1; opacity: 0; } }
+@keyframes startup-breathe { 50% { opacity: .3; box-shadow: 0 0 12px #99e5b5; } }
+@media (max-width: 600px) {
+  .startup-caption { bottom: 22px; left: 22px; right: 22px; justify-content: center; font-size: 8px; }
+  .startup-caption span:last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #startup-screen *, #startup-screen *::before, #startup-screen *::after { animation: none; }
+  .startup-logo path, .startup-logo circle { stroke-dashoffset: 0; }
+  .startup-vessel-flow { display: none; }
+  #startup-screen { transition-duration: 150ms; }
+}
